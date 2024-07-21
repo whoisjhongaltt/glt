@@ -1,9 +1,15 @@
-/* This is my attempt to create stb_ like single file header library for chess
-        https://github.com/nothings/stb/blob/master/docs/stb_howto.txt
-
-
+/** 
         Do this #define GLT_CHESS_IMPLEMENTATION
         before you include this file when you need function implementation
+
+        There is a example code at the end of the file 
+
+        TODO: 
+        1. Implement fen 
+        2. Implement move auditing
+        3. Move forward and backward (fen -> board -> fen)
+        4. Implement search algorithm
+        5. Read chess database
 */
 
 
@@ -49,15 +55,15 @@ typedef u8 glt_piece;
 
 /*
  *
- *  1 2 3 4 5 6 7 8
- * 8                8
- * 7                7 //black
- * 6                6
- * 5                5
- * 4                4
- * 3                3
- * 2                2 //white
- * 1                1
+ *  000000000000000
+ * 8                0
+ * 7                0 //black
+ * 6                0
+ * 5                0
+ * 4                0
+ * 3                0
+ * 2                0 //white
+ * 1                0
  *  1 2 3 4 5 6 7 8
  * It's better to use the left buttom up because 
  * It can easily converted to and from the coord struct
@@ -238,7 +244,7 @@ GLT_CHESS_API int glt_make_move(glt_chess_board* board, glt_move move);
 #endif
 /* Bit operations for accessing and manipulating flags */
 static inline int glt__is_flag_set(u32 flags, glt_flags flag){
-        return flag & flags > 0;
+        return (flag & flags) > 0;
 }
 
 static inline void glt__flag_set(u32 *flags, glt_flags flag){
@@ -249,7 +255,7 @@ static inline void glt__clear_flag(u32 *flags, glt_flags flag){
         *flags &= ~flag;
 }
 static inline void glt__flip_flag(u32 *flags, glt_flags flag){
-        *flags ^= ~flag;
+        *flags ^= flag;
 }
 
 static int glt_pos_is_equal(glt_pos a, glt_pos b)
@@ -271,6 +277,14 @@ static inline int glt_pos_to_index(glt_pos pos){
         return (pos.y-1) * 8 + (pos.x -1);
 }
 
+//index starts from 0 and ends at 63
+static inline glt_pos glt_index_to_pos(int index){
+        glt_pos ret;
+        ret.x = (index % 8) + 1;
+        ret.y = (index / 8) + 1;
+        return ret;
+}
+
 /* Get in the piece at the pos */
 static inline int glt_piece_at_pos(glt_chess_board* board, glt_pos pos)
 {
@@ -282,9 +296,9 @@ static inline int glt_piece_is_active_color(glt_chess_board* board, glt_piece pi
 {
         if (piece == GLT_none) return 1;
         else if (glt_piece_is_black(piece) && 
-                glt__is_flag_set(board->falgs, glt_flag_active_color)) return 1;
-        else if (glt_piece_is_white(piece) &&
                 !glt__is_flag_set(board->falgs, glt_flag_active_color)) return 1;
+        else if (glt_piece_is_white(piece) &&
+                glt__is_flag_set(board->falgs, glt_flag_active_color)) return 1;
 
         return 0;
 
@@ -623,7 +637,8 @@ static glt_move* glt_generate_king_moves(glt_chess_board* board, glt_pos start){
         return head;
 }
 
-static glt_move* glt_generate_queen_moves(glt_chess_board* board, glt_pos start) {
+static glt_move* glt_generate_queen_moves(glt_chess_board* board, glt_pos start) 
+{
         glt_move* head = NULL;
         glt_piece start_piece = glt_piece_at_pos(board, start);
 
@@ -705,7 +720,6 @@ static int glt_make_move(glt_chess_board* board, glt_move move){
 
         /**  TODO: add to audit */
 
-        int index = glt_pos_to_index(move.start);
         board->pieces[glt_pos_to_index(move.start)] = GLT_none;
         board->pieces[glt_pos_to_index(move.end)]   = piece;
 
@@ -809,18 +823,6 @@ int main(int argc, char const *argv[])
 
 #endif
 #endif //GLT_CHESS_IMPLEMENTATION
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

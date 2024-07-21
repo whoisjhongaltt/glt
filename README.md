@@ -7,4 +7,4 @@ The libraries will mostly focus on games on embeded programming.
 
 library    |  category |  LOC |  description
 --------------------- | -------- | -- | --------------------------------
-**[glt_chess.h](glt_chess.c)** | game | 810 | chess programming and apis
+**[glt_chess.h](glt_chess.h)** | game | 810 | chess programming and apis
