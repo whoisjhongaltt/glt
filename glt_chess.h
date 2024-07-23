@@ -119,14 +119,18 @@ typedef struct {
 
 
 typedef enum{
-        glt_flag_active_color  = 1 << 1, /* 'w' if 1 'b' of 0 */ 
+        glt_flag_active_color  = 1 << 1, /* white if 1 black of 0 */ 
         //TODO: implementt storing castling rights and en_pasant
         //glt_active_color  = 1 << 2,
         //glt_active_color  = 1 << 3,
+        glt_white_queen_castle = 1 << 2,
+        glt_white_king_castle  = 1 << 3,
+        glt_black_king_castle  = 1 << 4,
+        glt_black_queen_castle = 1 << 5,
 }glt_flags;
 typedef struct{
         glt_piece pieces[64];
-        u32 falgs;  
+        u32 flags;  
         u8 half_move_clock, full_move_clock;
 } glt_chess_board;
 
@@ -167,6 +171,16 @@ GLT_CHESS_API inline int glt_pieces_is_same_color(glt_piece a, glt_piece b);
          * Checks if the position is within the bound of the board
 */
 GLT_CHESS_API inline int glt_pos_in_bounds(glt_pos pos) ;
+
+
+
+/**
+ * Returns the forsyth-edwards notation from the given board
+ * https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
+
+ * Make sure that the string fen has enough memory allocated
+*/
+GLT_CHESS_API void glt_get_fen_from_board(glt_chess_board *board, char* fen, int len);
 
 
 /**
@@ -296,9 +310,9 @@ static inline int glt_piece_is_active_color(glt_chess_board* board, glt_piece pi
 {
         if (piece == GLT_none) return 1;
         else if (glt_piece_is_black(piece) && 
-                !glt__is_flag_set(board->falgs, glt_flag_active_color)) return 1;
+                !glt__is_flag_set(board->flags, glt_flag_active_color)) return 1;
         else if (glt_piece_is_white(piece) &&
-                glt__is_flag_set(board->falgs, glt_flag_active_color)) return 1;
+                glt__is_flag_set(board->flags, glt_flag_active_color)) return 1;
 
         return 0;
 
@@ -358,9 +372,23 @@ static void glt_initilize_board(glt_chess_board* board){
                 board->pieces[48 + i] = GLT_black_pawn;
         }
 
-        board->falgs = 0;
-        glt__flag_set(&board->falgs, glt_flag_active_color);
+        board->flags = 0;
+        glt__flag_set(&board->flags, glt_flag_active_color);
         //board->fen = (char*)malloc(1000);
+}
+
+static void glt_moves_delte(glt_move** head_ptr){
+        
+        glt_move* prev = *head_ptr;
+        glt_move* curr = prev;
+
+        while(curr){
+                prev = curr->next;
+                GLT_free(curr);
+                curr = prev;
+        }
+
+        *head_ptr = NULL;
 }
 
 /**
@@ -723,7 +751,7 @@ static int glt_make_move(glt_chess_board* board, glt_move move){
         board->pieces[glt_pos_to_index(move.start)] = GLT_none;
         board->pieces[glt_pos_to_index(move.end)]   = piece;
 
-        glt__flip_flag(&board->falgs, glt_flag_active_color);
+        glt__flip_flag(&board->flags, glt_flag_active_color);
 
         return 1;
 
@@ -760,6 +788,85 @@ static char glt_get_fen_char(glt_piece piece ) {
     default:
       return '-';
   }
+}
+
+static void glt_get_fen_from_board(glt_chess_board *board, char* fen, int len)
+{
+        /* Assert that len is greater than 100  */
+        assert(len >= 100);
+        memset(fen, 0x00, 100);
+
+        u8 empty_count = 0;
+        u8 index = 0;
+
+        /* go thru all the squares */
+        for (int rank = 1; rank <= 8; rank++)
+        {
+                for (int file = 1; file <= 8; file++)
+                {
+                        glt_pos pos;
+                        pos.x = file;
+                        pos.y = rank;
+                        glt_piece piece = board->pieces[glt_pos_to_index(pos)];
+
+                        if(piece == GLT_none){
+                                empty_count += 1; 
+                        }else{
+                                if (empty_count > 0){
+                                        fen[index++] = '0' + empty_count; //Convert int to char
+                                        empty_count  = 0;
+                                }
+                        }
+                        fen[index++] = glt_get_fen_char(piece);
+                }
+
+                if(empty_count > 0)
+                {
+                        fen[index++] = '0' + empty_count;
+                        empty_count  = 0;
+                }
+
+                //add a '/' after 
+                if(rank < 7)  fen[index++] = '/'; 
+        }
+        fen[index++] = ' ';
+
+        //active color
+
+        if(glt__is_flag_set(board->flags, glt_flag_active_color)) fen[index++] = 'w';
+        else fen[index++] = 'b';
+
+
+        if (glt__is_flag_set(board->flags, glt_white_king_castle))  fen[index++] = 'K';
+        if (glt__is_flag_set(board->flags, glt_white_queen_castle)) fen[index++] = 'Q';
+        if (glt__is_flag_set(board->flags, glt_black_king_castle))  fen[index++] = 'k';
+        if (glt__is_flag_set(board->flags, glt_black_queen_castle)) fen[index++] = 'q';
+
+
+        /** if none of the flag is set */
+        if (!glt__is_flag_set(board->flags, 
+                glt_white_queen_castle |
+                glt_white_king_castle  | 
+                glt_black_king_castle  | 
+                glt_black_queen_castle
+                ))
+        {
+                fen[index++] = '-';
+        }
+
+
+        fen[index++] = ' ';
+
+        /* en pasant */
+        fen[index++] = '-';
+
+        /* change to something with clib independent */
+        index += sprintf(&fen[index], " %d", board->half_move_clock);
+        index += sprintf(&fen[index], " %d", board->full_move_clock);
+
+        fen[index] = '\0';
+
+
 }
 
 //DEMO application
@@ -812,6 +919,12 @@ int main(int argc, char const *argv[])
         glt_make_move(&board, *moves);
         print_board(board);
 
+        char fen[100] = {0};
+
+        glt_get_fen_from_board(&board, fen, 100);
+
+        printf("%s\n", fen);
+
         cord.file = 'C';
         cord.rank = 1;
         moves = glt_generate_moves(&board, glt_coord_to_pos(cord));
@@ -823,6 +936,18 @@ int main(int argc, char const *argv[])
 
 #endif
 #endif //GLT_CHESS_IMPLEMENTATION
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
